@@ -1,0 +1,100 @@
+sudo: required
+
+services:
+    - docker
+
+env:  
+    global:
+        - DOCKER_VERSION=1.11.1-0~trusty
+        - DOCKER_COMPOSE_VERSION=1.7.0
+
+before_install:  
+    # list docker-engine versions
+    - apt-cache madison docker-engine
+
+    # upgrade docker-engine to specific version
+    - sudo apt-get -o Dpkg::Options::="--force-confnew" install -y docker-engine=${DOCKER_VERSION}
+
+    # reinstall docker-compose at specific version
+    - sudo rm /usr/local/bin/docker-compose
+    - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+    - chmod +x docker-compose
+    - sudo mv docker-compose /usr/local/bin
+
+script:  
+    - docker version
+    - docker-compose version
+
+    - ls -lah
+
+    # Build images
+    - docker-compose -f ./docker-compose-lb.yml build
+    - docker-compose -f ./docker-compose-a.yml build
+    - docker-compose -f ./docker-compose-b.yml build
+
+    # Start the load balancer
+    - docker-compose -f ./docker-compose-lb.yml up -d
+    - curl http://localhost:5050/
+    - curl http://localhost:5050/ | grep -q '404 page not found'
+
+    # Start the server A
+    - docker-compose -f ./docker-compose-a.yml up -d
+
+    # See started containers
+    - docker ps -a
+
+    # Wait to container to start
+    - sleep 10
+
+    # See the result of the web servers 
+    - curl http://localhost:5011/
+    - curl http://localhost:5050/
+
+    # Check the result of the web servers 
+    - curl http://localhost:5011/ | grep -q 'Web Server A'
+    - curl http://localhost:5050/ | grep -q 'Web Server A'
+
+
+
+    ## Start the server B
+    - docker-compose -f ./docker-compose-b.yml up -d
+
+    # See started containers
+    - docker ps -a
+
+    # Wait to container to start
+    - sleep 10
+
+    # See the result of the web servers 
+    - echo See the result of the web servers 
+    - curl http://localhost:5011/
+    - curl http://localhost:5012/
+    - curl http://localhost:5050/
+    - curl http://localhost:5050/
+    - curl http://localhost:5050/
+    - curl http://localhost:5050/
+    - curl http://localhost:5050/
+
+    # Check the result of the web servers 
+    - curl http://localhost:5011/ | grep -q 'Web Server A'
+    - curl http://localhost:5012/ | grep -q 'Web Server B'
+    - curl http://localhost:5050/ | grep -q 'Web Server '
+
+
+
+    # Stop the server A
+    - docker-compose -f ./docker-compose-a.yml kill
+
+    # See started containers
+    - docker ps -a
+
+    # Wait to container to start
+    - sleep 10
+
+    # See the result of the web servers 
+    - curl http://localhost:5012/
+    - curl http://localhost:5050/
+
+    # Check the result of the web servers 
+    - curl http://localhost:5012/ | grep -q 'Web Server B'
+    - curl http://localhost:5050/ | grep -q 'Web Server B'
